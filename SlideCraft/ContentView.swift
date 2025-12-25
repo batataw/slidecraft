@@ -2,23 +2,31 @@
 //  ContentView.swift
 //  SlideCraft
 //
-//  Created by Alan Digital on 14/12/2025.
-//
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
+    @Environment(AppState.self) private var appState
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        switch appState.currentScreen {
+        case .home:
+            HomeView()
+        case .characters:
+            CharactersView()
+        case .backgrounds:
+            BackgroundsView()
+        case .projectSetup:
+            ProjectSetupView()
+        case .carouselEditor:
+            CarouselEditorView()
         }
-        .padding()
     }
 }
 
 #Preview {
     ContentView()
+        .environment(AppState())
+        .modelContainer(for: [Character.self, Carousel.self, Slide.self])
 }

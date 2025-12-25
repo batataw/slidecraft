@@ -6,7 +6,7 @@
 import Foundation
 import SwiftData
 
-enum TikTokPublishStatus {
+enum TikTokPublishStatus: Sendable {
     case none
     case draft
     case published

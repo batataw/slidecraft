@@ -40,6 +40,7 @@ struct CarouselEditorView: View {
     @State private var showSocialDescriptionSheet: Bool = false
 
     private let exportService = ExportService()
+    private let tiktokService = TikTokService()
 
     private var viewModel: CarouselViewModel {
         appState.carouselViewModel
@@ -190,6 +191,18 @@ struct CarouselEditorView: View {
                         }
                         .buttonStyle(SCGhostButtonStyle())
                         .disabled(viewModel.isGeneratingSocialContent)
+
+                        Button {
+                            appState.navigateToTikTokPublish()
+                        } label: {
+                            HStack(spacing: SCSpacing.xs) {
+                                Image(systemName: "play.rectangle.fill")
+                                Text("TikTok")
+                            }
+                        }
+                        .buttonStyle(SCSecondaryButtonStyle())
+                        .disabled(!tiktokService.isAuthenticated)
+                        .help(tiktokService.isAuthenticated ? "Publier sur TikTok" : "Connectez TikTok dans les Reglages")
 
                         Button {
                             exportAsZIP()

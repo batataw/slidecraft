@@ -248,22 +248,36 @@ struct ProjectCard: View {
     @State private var isHovered = false
 
     private var statusText: String {
-        if carousel.isComplete {
-            return "Complet"
-        } else if carousel.allTextsValidated {
-            return "Images en cours"
-        } else {
-            return "Validation"
+        switch carousel.tiktokPublishStatus {
+        case .published:
+            return "Publié"
+        case .draft:
+            return "Brouillon TikTok"
+        case .none:
+            if carousel.isComplete {
+                return "Complet"
+            } else if carousel.allTextsValidated {
+                return "Images en cours"
+            } else {
+                return "Validation"
+            }
         }
     }
 
     private var statusColor: Color {
-        if carousel.isComplete {
+        switch carousel.tiktokPublishStatus {
+        case .published:
             return .scSuccess
-        } else if carousel.allTextsValidated {
-            return .scSecondary
-        } else {
-            return .scWarning
+        case .draft:
+            return .orange
+        case .none:
+            if carousel.isComplete {
+                return .scSuccess
+            } else if carousel.allTextsValidated {
+                return .scSecondary
+            } else {
+                return .scWarning
+            }
         }
     }
 

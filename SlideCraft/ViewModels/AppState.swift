@@ -13,6 +13,7 @@ enum AppScreen {
     case backgrounds      // Manage background bank
     case projectSetup     // NEW: Combined character + background + subject selection
     case carouselEditor   // NEW: Combined text validation + image generation
+    case tiktokPublish    // TikTok publishing screen
 }
 
 @Observable
@@ -83,6 +84,10 @@ final class AppState {
 
     func navigateToCarouselEditor() {
         currentScreen = .carouselEditor
+    }
+
+    func navigateToTikTokPublish() {
+        currentScreen = .tiktokPublish
     }
 
     func openSettings() {

@@ -21,6 +21,8 @@ struct ContentView: View {
             ProjectSetupView()
         case .carouselEditor:
             CarouselEditorView()
+        case .tiktokPublish:
+            TikTokPublishView()
         }
     }
 }

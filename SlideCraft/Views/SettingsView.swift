@@ -15,6 +15,9 @@ struct SettingsView: View {
     @State private var showOpenAIKey: Bool = false
     @State private var showGeminiKey: Bool = false
     @State private var saveStatus: String?
+    @State private var tiktokService = TikTokService()
+    @State private var isConnectingTikTok = false
+    @State private var tiktokError: String?
 
     private let keychain = KeychainService.shared
 
@@ -31,6 +34,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: SCSpacing.lg) {
                         apiKeysSection
                         statusSection
+                        tiktokSection
                     }
                     .padding(SCSpacing.lg)
                     .frame(maxWidth: 520)
@@ -228,6 +232,116 @@ struct SettingsView: View {
                     .background(status.contains("succès") ? Color.scSuccess.opacity(0.1) : Color.scWarning.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: SCRadius.md))
                     .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+    }
+
+    // MARK: - TikTok Section
+
+    private var tiktokSection: some View {
+        SCCard {
+            VStack(alignment: .leading, spacing: SCSpacing.lg) {
+                SCSectionHeader(
+                    title: "TikTok",
+                    subtitle: "Publiez vos carrousels directement sur TikTok"
+                )
+
+                if tiktokService.isAuthenticated {
+                    // Connected state
+                    HStack {
+                        HStack(spacing: SCSpacing.md) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.scSuccess.opacity(0.2))
+                                    .frame(width: 40, height: 40)
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.scSuccess)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Compte connecté")
+                                    .font(SCTypography.headline)
+                                    .foregroundColor(.scText)
+                                Text(tiktokService.username ?? "@utilisateur")
+                                    .font(SCTypography.caption)
+                                    .foregroundColor(.scTextTertiary)
+                            }
+                        }
+
+                        Spacer()
+
+                        Button("Déconnecter") {
+                            tiktokService.disconnect()
+                        }
+                        .buttonStyle(SCGhostButtonStyle())
+                    }
+                } else {
+                    // Disconnected state
+                    VStack(alignment: .leading, spacing: SCSpacing.md) {
+                        HStack(spacing: SCSpacing.md) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.scTextTertiary.opacity(0.2))
+                                    .frame(width: 40, height: 40)
+                                Image(systemName: "person.crop.circle.badge.questionmark")
+                                    .foregroundColor(.scTextTertiary)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Non connecté")
+                                    .font(SCTypography.headline)
+                                    .foregroundColor(.scText)
+                                Text("Connectez votre compte TikTok pour publier")
+                                    .font(SCTypography.caption)
+                                    .foregroundColor(.scTextTertiary)
+                            }
+                        }
+
+                        Button {
+                            connectTikTok()
+                        } label: {
+                            HStack(spacing: SCSpacing.sm) {
+                                if isConnectingTikTok {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .tint(.white)
+                                }
+                                Text(isConnectingTikTok ? "Connexion..." : "Connecter mon compte")
+                            }
+                        }
+                        .buttonStyle(SCPrimaryButtonStyle())
+                        .disabled(isConnectingTikTok)
+
+                        if let error = tiktokError {
+                            HStack(spacing: SCSpacing.sm) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .foregroundColor(.scError)
+                                Text(error)
+                                    .font(SCTypography.caption)
+                                    .foregroundColor(.scError)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func connectTikTok() {
+        isConnectingTikTok = true
+        tiktokError = nil
+
+        Task {
+            do {
+                try await tiktokService.authenticate()
+                await MainActor.run {
+                    isConnectingTikTok = false
+                }
+            } catch {
+                await MainActor.run {
+                    isConnectingTikTok = false
+                    tiktokError = error.localizedDescription
                 }
             }
         }

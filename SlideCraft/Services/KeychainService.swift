@@ -9,9 +9,6 @@ import Security
 enum KeychainKey: String {
     case openAIAPIKey = "com.slidecraft.openai-api-key"
     case geminiAPIKey = "com.slidecraft.gemini-api-key"
-    case tiktokAccessToken = "com.slidecraft.tiktok-access-token"
-    case tiktokRefreshToken = "com.slidecraft.tiktok-refresh-token"
-    case tiktokOpenId = "com.slidecraft.tiktok-open-id"
 }
 
 final class KeychainService: Sendable {

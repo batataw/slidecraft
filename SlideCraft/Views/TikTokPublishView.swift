@@ -2,9 +2,12 @@
 //  TikTokPublishView.swift
 //  SlideCraft
 //
+//  WebView-based TikTok publishing with drag & drop assets
+//
 
 import SwiftUI
 import SwiftData
+import WebKit
 
 struct TikTokPublishView: View {
     @Environment(AppState.self) private var appState
@@ -12,44 +15,32 @@ struct TikTokPublishView: View {
 
     @State private var title: String = ""
     @State private var description: String = ""
-    @State private var isPublishing: Bool = false
-    @State private var publishError: String?
-    @State private var publishSuccess: Bool = false
-
-    private let tiktokService = TikTokService()
-    private let maxTitleLength = 150
-    private let maxDescriptionLength = 2200
-
+    @State private var copiedField: CopiedField?
     @State private var saveTask: Task<Void, Never>?
+
+    private enum CopiedField {
+        case title, description
+    }
 
     private var carousel: Carousel? {
         appState.carouselViewModel.currentCarousel
-    }
-
-    private var canPublish: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        tiktokService.isAuthenticated &&
-        !isPublishing
     }
 
     var body: some View {
         VStack(spacing: 0) {
             header
 
-            ScrollView {
-                VStack(spacing: SCSpacing.xl) {
-                    previewSection
-                    formSection
-                    statusSection
-                }
-                .padding(SCSpacing.xl)
-                .frame(maxWidth: 600)
-            }
-            .frame(maxWidth: .infinity)
+            HSplitView {
+                // Left: Assets panel
+                assetsPanel
+                    .frame(minWidth: 280, maxWidth: 350)
 
-            footer
+                // Right: WebView
+                TikTokWebView()
+                    .frame(minWidth: 400)
+            }
         }
-        .frame(minWidth: 700, minHeight: 600)
+        .frame(minWidth: 900, minHeight: 700)
         .background(Color.scBackground)
         .onAppear {
             loadDraft()
@@ -78,7 +69,12 @@ struct TikTokPublishView: View {
 
             Spacer()
 
-            Color.clear.frame(width: 80)
+            HStack(spacing: SCSpacing.xs) {
+                Image(systemName: "info.circle")
+                Text("Glissez les images dans TikTok")
+                    .font(SCTypography.caption)
+            }
+            .foregroundColor(.scTextTertiary)
         }
         .padding(.horizontal, SCSpacing.lg)
         .padding(.vertical, SCSpacing.md)
@@ -88,55 +84,45 @@ struct TikTokPublishView: View {
         }
     }
 
-    // MARK: - Preview Section
+    // MARK: - Assets Panel
 
-    private var previewSection: some View {
-        VStack(alignment: .leading, spacing: SCSpacing.md) {
-            Text("Apercu des slides")
-                .font(SCTypography.caption)
-                .foregroundColor(.scTextTertiary)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: SCSpacing.md) {
+    private var assetsPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Images section
+            VStack(alignment: .leading, spacing: SCSpacing.md) {
+                HStack {
+                    Text("Images")
+                        .font(SCTypography.headline)
+                        .foregroundColor(.scText)
+                    Spacer()
                     if let carousel = carousel {
-                        ForEach(Array(carousel.sortedSlides.enumerated()), id: \.element.id) { index, slide in
-                            if let imagePath = slide.imagePath,
-                               let image = NSImage(contentsOfFile: imagePath) {
-                                VStack(spacing: SCSpacing.xs) {
-                                    Image(nsImage: image)
-                                        .resizable()
-                                        .aspectRatio(4/5, contentMode: .fill)
-                                        .frame(width: 80, height: 100)
-                                        .clipShape(RoundedRectangle(cornerRadius: SCRadius.sm))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: SCRadius.sm)
-                                                .stroke(Color.scBorder, lineWidth: 1)
-                                        )
+                        Text("\(carousel.slides.count) slides")
+                            .font(SCTypography.caption)
+                            .foregroundColor(.scTextTertiary)
+                    }
+                }
 
-                                    Text("\(index + 1)")
-                                        .font(SCTypography.caption2)
-                                        .foregroundColor(.scTextTertiary)
-                                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: SCSpacing.sm) {
+                        if let carousel = carousel {
+                            ForEach(Array(carousel.sortedSlides.enumerated()), id: \.element.id) { index, slide in
+                                DraggableSlideImage(slide: slide, index: index)
                             }
                         }
                     }
+                    .padding(.vertical, SCSpacing.xs)
                 }
-                .padding(.vertical, SCSpacing.sm)
+
+                Text("Glissez les images vers TikTok")
+                    .font(SCTypography.caption)
+                    .foregroundColor(.scTextTertiary)
             }
-        }
-        .padding(SCSpacing.lg)
-        .background(Color.scCard)
-        .clipShape(RoundedRectangle(cornerRadius: SCRadius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: SCRadius.lg)
-                .stroke(Color.scBorder, lineWidth: 1)
-        )
-    }
+            .padding(SCSpacing.lg)
+            .background(Color.scSurface)
 
-    // MARK: - Form Section
+            SCDivider()
 
-    private var formSection: some View {
-        VStack(alignment: .leading, spacing: SCSpacing.lg) {
+            // Title section
             VStack(alignment: .leading, spacing: SCSpacing.sm) {
                 HStack {
                     Text("Titre")
@@ -145,9 +131,23 @@ struct TikTokPublishView: View {
 
                     Spacer()
 
-                    Text("\(title.count)/\(maxTitleLength)")
-                        .font(SCTypography.caption)
-                        .foregroundColor(title.count > maxTitleLength ? .scError : .scTextTertiary)
+                    if copiedField == .title {
+                        HStack(spacing: SCSpacing.xs) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10))
+                            Text("Copié")
+                                .font(SCTypography.caption)
+                        }
+                        .foregroundColor(.scSuccess)
+                    }
+
+                    Button {
+                        copyToClipboard(title, field: .title)
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(SCGhostButtonStyle())
+                    .disabled(title.isEmpty)
                 }
 
                 TextField("Titre de votre publication...", text: $title)
@@ -156,7 +156,11 @@ struct TikTokPublishView: View {
                         scheduleSave()
                     }
             }
+            .padding(SCSpacing.lg)
 
+            SCDivider()
+
+            // Description section
             VStack(alignment: .leading, spacing: SCSpacing.sm) {
                 HStack {
                     Text("Description")
@@ -165,133 +169,60 @@ struct TikTokPublishView: View {
 
                     Spacer()
 
-                    Text("\(description.count)/\(maxDescriptionLength)")
-                        .font(SCTypography.caption)
-                        .foregroundColor(description.count > maxDescriptionLength ? .scError : .scTextTertiary)
+                    if copiedField == .description {
+                        HStack(spacing: SCSpacing.xs) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10))
+                            Text("Copié")
+                                .font(SCTypography.caption)
+                        }
+                        .foregroundColor(.scSuccess)
+                    }
+
+                    Button {
+                        copyToClipboard(description, field: .description)
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(SCGhostButtonStyle())
+                    .disabled(description.isEmpty)
                 }
 
                 TextEditor(text: $description)
                     .font(SCTypography.body)
                     .foregroundColor(.scText)
                     .scrollContentBackground(.hidden)
-                    .frame(minHeight: 120)
-                    .padding(SCSpacing.md)
+                    .frame(minHeight: 100)
+                    .padding(SCSpacing.sm)
                     .background(Color.scSurface)
-                    .clipShape(RoundedRectangle(cornerRadius: SCRadius.md))
+                    .clipShape(RoundedRectangle(cornerRadius: SCRadius.sm))
                     .overlay(
-                        RoundedRectangle(cornerRadius: SCRadius.md)
+                        RoundedRectangle(cornerRadius: SCRadius.sm)
                             .stroke(Color.scBorder, lineWidth: 1)
                     )
                     .onChange(of: description) {
                         scheduleSave()
                     }
             }
-
-            if !tiktokService.isAuthenticated {
-                HStack(spacing: SCSpacing.md) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.scWarning)
-
-                    Text("Connectez votre compte TikTok dans les Reglages pour publier")
-                        .font(SCTypography.callout)
-                        .foregroundColor(.scText)
-
-                    Spacer()
-
-                    Button("Reglages") {
-                        appState.openSettings()
-                    }
-                    .buttonStyle(SCSecondaryButtonStyle())
-                }
-                .padding(SCSpacing.md)
-                .background(Color.scWarning.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: SCRadius.md))
-            }
-        }
-    }
-
-    // MARK: - Status Section
-
-    @ViewBuilder
-    private var statusSection: some View {
-        if let error = publishError {
-            HStack(spacing: SCSpacing.md) {
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundColor(.scError)
-
-                Text(error)
-                    .font(SCTypography.callout)
-                    .foregroundColor(.scError)
-
-                Spacer()
-
-                Button {
-                    publishError = nil
-                } label: {
-                    Image(systemName: "xmark")
-                        .foregroundColor(.scTextTertiary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(SCSpacing.md)
-            .background(Color.scError.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: SCRadius.md))
-        }
-
-        if publishSuccess {
-            HStack(spacing: SCSpacing.md) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.scSuccess)
-
-                Text("Publication reussie ! Votre carrousel est en ligne sur TikTok.")
-                    .font(SCTypography.callout)
-                    .foregroundColor(.scSuccess)
-
-                Spacer()
-            }
-            .padding(SCSpacing.md)
-            .background(Color.scSuccess.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: SCRadius.md))
-        }
-    }
-
-    // MARK: - Footer
-
-    private var footer: some View {
-        HStack {
-            HStack(spacing: SCSpacing.xs) {
-                Image(systemName: "doc.badge.clock")
-                    .font(.system(size: 12))
-                Text("Brouillon sauvegarde automatiquement")
-                    .font(SCTypography.caption)
-            }
-            .foregroundColor(.scTextTertiary)
+            .padding(SCSpacing.lg)
 
             Spacer()
 
-            Button {
-                publish()
-            } label: {
-                HStack(spacing: SCSpacing.sm) {
-                    if isPublishing {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .tint(.white)
-                        Text("Publication en cours...")
-                    } else {
-                        Image(systemName: "paperplane.fill")
-                        Text("Publier")
-                    }
+            // Footer
+            VStack(spacing: SCSpacing.sm) {
+                SCDivider()
+
+                HStack(spacing: SCSpacing.xs) {
+                    Image(systemName: "doc.badge.clock")
+                        .font(.system(size: 12))
+                    Text("Brouillon sauvegardé")
+                        .font(SCTypography.caption)
                 }
+                .foregroundColor(.scTextTertiary)
+                .padding(SCSpacing.md)
             }
-            .buttonStyle(SCPrimaryButtonStyle())
-            .disabled(!canPublish)
         }
-        .padding(SCSpacing.lg)
         .background(Color.scBackgroundSecondary)
-        .overlay(alignment: .top) {
-            SCDivider()
-        }
     }
 
     // MARK: - Actions
@@ -321,44 +252,80 @@ struct TikTokPublishView: View {
         try? modelContext.save()
     }
 
-    private func publish() {
-        guard let carousel = carousel else { return }
+    private func copyToClipboard(_ text: String, field: CopiedField) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
 
-        isPublishing = true
-        publishError = nil
-        publishSuccess = false
-
-        let imageURLs = carousel.sortedSlides.compactMap { slide -> URL? in
-            guard let path = slide.imagePath else { return nil }
-            return URL(fileURLWithPath: path)
+        withAnimation {
+            copiedField = field
         }
 
-        Task {
-            do {
-                let postId = try await tiktokService.publishCarousel(
-                    images: imageURLs,
-                    title: title,
-                    description: description
-                )
-
-                await MainActor.run {
-                    carousel.tiktokPostId = postId
-                    carousel.tiktokPublishedAt = Date()
-                    carousel.tiktokTitle = nil
-                    carousel.tiktokDescription = nil
-                    try? modelContext.save()
-
-                    isPublishing = false
-                    publishSuccess = true
-                }
-            } catch {
-                await MainActor.run {
-                    isPublishing = false
-                    publishError = error.localizedDescription
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation {
+                if copiedField == field {
+                    copiedField = nil
                 }
             }
         }
     }
+}
+
+// MARK: - Draggable Slide Image
+
+private struct DraggableSlideImage: View {
+    let slide: Slide
+    let index: Int
+
+    var body: some View {
+        if let imagePath = slide.imagePath,
+           let image = NSImage(contentsOfFile: imagePath) {
+            VStack(spacing: SCSpacing.xs) {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(4/5, contentMode: .fill)
+                    .frame(width: 60, height: 75)
+                    .clipShape(RoundedRectangle(cornerRadius: SCRadius.sm))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SCRadius.sm)
+                            .stroke(Color.scBorder, lineWidth: 1)
+                    )
+                    .draggable(image) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(4/5, contentMode: .fill)
+                            .frame(width: 60, height: 75)
+                            .clipShape(RoundedRectangle(cornerRadius: SCRadius.sm))
+                            .opacity(0.8)
+                    }
+
+                Text("\(index + 1)")
+                    .font(SCTypography.caption2)
+                    .foregroundColor(.scTextTertiary)
+            }
+        }
+    }
+}
+
+// MARK: - TikTok WebView
+
+struct TikTokWebView: NSViewRepresentable {
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+
+        // Mobile user agent for TikTok upload interface
+        webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
+        if let url = URL(string: "https://www.tiktok.com/upload") {
+            webView.load(URLRequest(url: url))
+        }
+
+        return webView
+    }
+
+    func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 
 #Preview {
